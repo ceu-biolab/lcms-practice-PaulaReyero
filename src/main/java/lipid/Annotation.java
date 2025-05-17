@@ -1,9 +1,10 @@
 package lipid;
 
-import java.util.Collections;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
+import adduct.Adduct;
+import adduct.AdductList;
+import static adduct.Adduct.*;
+import java.util.*;
 
 /**
  * Class to represent the annotation over a lipid
@@ -14,22 +15,21 @@ public class Annotation {
     private final double mz;
     private final double intensity; // intensity of the most abundant peak in the groupedPeaks
     private final double rtMin;
-    private final IoniationMode ionizationMode;
-    private String adduct; // !!TODO The adduct will be detected based on the groupedSignals
+    private String adduct;
     private final Set<Peak> groupedSignals;
     private int score;
     private int totalScoresApplied;
-
+    private Ionization ionization;
 
     /**
      * @param lipid
      * @param mz
      * @param intensity
      * @param retentionTime
-     * @param ionizationMode
      */
-    public Annotation(Lipid lipid, double mz, double intensity, double retentionTime, IoniationMode ionizationMode) {
-        this(lipid, mz, intensity, retentionTime, ionizationMode, Collections.emptySet());
+
+    public Annotation(Lipid lipid, double mz, double intensity, double retentionTime, Ionization ionization) {
+        this(lipid, mz, intensity, retentionTime, ionization, Collections.emptySet());
     }
 
     /**
@@ -37,19 +37,18 @@ public class Annotation {
      * @param mz
      * @param intensity
      * @param retentionTime
-     * @param ionizationMode
      * @param groupedSignals
      */
-    public Annotation(Lipid lipid, double mz, double intensity, double retentionTime, IoniationMode ionizationMode, Set<Peak> groupedSignals) {
+    public Annotation(Lipid lipid, double mz, double intensity, double retentionTime, Ionization ionization, Set<Peak> groupedSignals) {
         this.lipid = lipid;
         this.mz = mz;
         this.rtMin = retentionTime;
         this.intensity = intensity;
-        this.ionizationMode = ionizationMode;
-        // !!TODO This set should be sorted according to help the program to deisotope the signals plus detect the adduct
         this.groupedSignals = new TreeSet<>(groupedSignals);
         this.score = 0;
         this.totalScoresApplied = 0;
+        this.ionization = ionization;
+        this.adduct = detectAdduct(this.groupedSignals);
     }
 
     public Lipid getLipid() {
@@ -76,8 +75,8 @@ public class Annotation {
         return intensity;
     }
 
-    public IoniationMode getIonizationMode() {
-        return ionizationMode;
+    public Ionization getIonizationMode() {
+        return ionization;
     }
 
     public Set<Peak> getGroupedSignals() {
@@ -128,5 +127,40 @@ public class Annotation {
                 lipid.getName(), mz, rtMin, adduct, intensity, score);
     }
 
-    // !!TODO Detect the adduct with an algorithm or with drools, up to the user.
+    private static final int TOLERANCE_PPM = 10;
+
+    public String detectAdduct(Set<Peak> groupedSignals) {
+        if (groupedSignals == null || groupedSignals.size() < 1) return "unknown";
+
+        Map<String, Double> adductMap = ionization == Ionization.POSITIVE
+                ? AdductList.MAPMZPOSITIVEADDUCTS
+                : AdductList.MAPMZNEGATIVEADDUCTS;
+
+        String bestAdduct = "unknown";
+        double bestPpm = Double.MAX_VALUE;
+
+        List<Peak> peaks = new ArrayList<>(groupedSignals);
+
+        for (String adduct : adductMap.keySet()) {
+            for (Peak peak : peaks) {
+                // Calcular masa monoisotópica desde ese aducto y mz del pico
+                Double monoMass = Adduct.getMonoisotopicMassFromMZ(peak.getMz(), adduct);
+                if (monoMass == null) continue;
+
+                // Obtener mz esperado con ese aducto
+                Double expectedMz = Adduct.getMZFromMonoisotopicMass(monoMass, adduct);
+                if (expectedMz == null) continue;
+
+                // Calcular error en ppm comparando el mz calculado vs el mz de esta anotación
+                double ppmError = Adduct.calculatePPMIncrement(this.mz, expectedMz);
+                System.out.printf("mz=%.5f | adduct=%-15s | expectedMz=%.5f | ppm=%.2f\n", this.mz, adduct, expectedMz, ppmError);
+
+                if (ppmError < TOLERANCE_PPM && ppmError < bestPpm) {
+                    bestPpm = ppmError;
+                    bestAdduct = adduct;
+                }
+            }
+        }
+        return bestAdduct;
+    }
 }

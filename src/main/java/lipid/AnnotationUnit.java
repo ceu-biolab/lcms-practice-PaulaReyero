@@ -3,25 +3,21 @@ package lipid;
 import org.drools.ruleunits.api.DataSource;
 import org.drools.ruleunits.api.DataStore;
 import org.drools.ruleunits.api.RuleUnitData;
+import org.drools.ruleunits.api.RuleUnitInstance;
 
-import java.util.HashSet;
-
-public class LipidScoreUnit implements RuleUnitData {
-
-    // !TODO insert here the code to store the data structures containing the facts where the rules will be applied
-
+public class AnnotationUnit implements RuleUnitData {
 
     private final DataStore<Annotation> annotations;
 
-    public LipidScoreUnit() {
+    public AnnotationUnit() {
         this(DataSource.createStore());
     }
 
-    public LipidScoreUnit(DataStore<Annotation> annotations) {
+    public AnnotationUnit(DataStore<Annotation> annotations) {
         this.annotations = annotations;
     }
+
     public DataStore<Annotation> getAnnotations() {
         return annotations;
     }
-
 }
